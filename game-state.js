@@ -6,6 +6,7 @@ const state = {
   isAnimating: false,
   pendingAiTimeout: null,
   isFlipped: false,
+  theme: 'classic',
 };
 
 window.__cancelPendingAiTurn = function cancelPendingAiTurn() {

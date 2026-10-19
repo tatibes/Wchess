@@ -132,7 +132,8 @@ const createGameController = window.__createGameController;
     const container = document.getElementById('canvas-container');
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0a0b10);
-    scene.fog = new THREE.FogExp2(0x0a0b10, 0.025);
+    const sceneFog = new THREE.FogExp2(0x0a0b10, 0.025);
+    scene.fog = sceneFog;
 
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -220,17 +221,19 @@ const createGameController = window.__createGameController;
     });
 
     // Build Gothic Cathedral Architecture
+    const cathedralFloorMat = new THREE.MeshStandardMaterial({
+      color: 0x0f1118,
+      roughness: 0.4,
+      metalness: 0.1,
+    });
+    const cathedralPillarMat = new THREE.MeshStandardMaterial({ color: 0x1a1c23, roughness: 0.8 });
+
     function buildCathedral() {
       const cathedralGroup = new THREE.Group();
 
       // Stone floor
       const floorGeo = new THREE.PlaneGeometry(50, 50);
-      const floorMat = new THREE.MeshStandardMaterial({
-        color: 0x0f1118,
-        roughness: 0.4,
-        metalness: 0.1,
-      });
-      const floor = new THREE.Mesh(floorGeo, floorMat);
+      const floor = new THREE.Mesh(floorGeo, cathedralFloorMat);
       floor.rotation.x = -Math.PI / 2;
       floor.position.y = -0.1;
       floor.receiveShadow = true;
@@ -238,14 +241,13 @@ const createGameController = window.__createGameController;
 
       // Pillars
       const pillarGeo = new THREE.CylinderGeometry(0.6, 0.8, 20, 8);
-      const pillarMat = new THREE.MeshStandardMaterial({ color: 0x1a1c23, roughness: 0.8 });
 
       const pillarX = [-10, 10];
       const pillarZ = [-12, -4, 4, 12];
 
       pillarX.forEach(x => {
         pillarZ.forEach(z => {
-          const pillar = new THREE.Mesh(pillarGeo, pillarMat);
+          const pillar = new THREE.Mesh(pillarGeo, cathedralPillarMat);
           pillar.position.set(x, 10, z);
           pillar.castShadow = true;
           pillar.receiveShadow = true;
@@ -253,9 +255,80 @@ const createGameController = window.__createGameController;
         });
       });
 
-      scene.add(cathedralGroup);
+      return cathedralGroup;
     }
-    buildCathedral();
+    const cathedralEnvironment = buildCathedral();
+    scene.add(cathedralEnvironment);
+
+    const voxelEnvironment = new THREE.Group();
+    const voxelGroundMat = new THREE.MeshStandardMaterial({ color: 0x354d2c, roughness: 1 });
+    const voxelGrassMat = new THREE.MeshStandardMaterial({ color: 0x658b3d, roughness: 1 });
+    const voxelGrassTopMat = new THREE.MeshStandardMaterial({ color: 0x8caf50, roughness: 1 });
+    const voxelDirtMat = new THREE.MeshStandardMaterial({ color: 0x70513a, roughness: 1 });
+    const voxelTrunkMat = new THREE.MeshStandardMaterial({ color: 0x6c4a2d, roughness: 1 });
+    const voxelLeafMat = new THREE.MeshStandardMaterial({ color: 0x4b7838, roughness: 1 });
+    const voxelLightLeafMat = new THREE.MeshStandardMaterial({ color: 0x658f40, roughness: 1 });
+
+    function addVoxelBlock(width, height, depth, x, y, z, material, parent = voxelEnvironment) {
+      const block = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
+      block.position.set(x, y, z);
+      block.castShadow = true;
+      block.receiveShadow = true;
+      parent.add(block);
+      return block;
+    }
+
+    function addVoxelTree(x, z, scale = 1) {
+      const trunkHeight = 2.2 * scale;
+      addVoxelBlock(0.55 * scale, trunkHeight, 0.55 * scale, x, trunkHeight / 2 - 0.08, z, voxelTrunkMat);
+      addVoxelBlock(2.1 * scale, 0.8 * scale, 2.1 * scale, x, trunkHeight + 0.15 * scale, z, voxelLeafMat);
+      addVoxelBlock(1.65 * scale, 0.8 * scale, 1.65 * scale, x, trunkHeight + 0.85 * scale, z, voxelLightLeafMat);
+      addVoxelBlock(1.05 * scale, 0.65 * scale, 1.05 * scale, x, trunkHeight + 1.55 * scale, z, voxelLeafMat);
+    }
+
+    function buildVoxelEnvironment() {
+      const landscape = new THREE.Group();
+      const ground = new THREE.Mesh(new THREE.PlaneGeometry(50, 50), voxelGroundMat);
+      ground.rotation.x = -Math.PI / 2;
+      ground.position.y = -0.105;
+      ground.receiveShadow = true;
+      landscape.add(ground);
+
+      const edgePositions = [
+        [-9, -9], [-12, -5], [-10, 1], [-12, 8],
+        [9, -9], [12, -5], [10, 1], [12, 8],
+        [-5, -12], [5, -12],
+      ];
+
+      edgePositions.forEach(([x, z], index) => {
+        const width = index % 2 === 0 ? 2.8 : 2.2;
+        const depth = index % 2 === 0 ? 2.4 : 2.8;
+        addVoxelBlock(width, 0.75, depth, x, 0.275, z, voxelDirtMat, landscape);
+        addVoxelBlock(width, 0.18, depth, x, 0.74, z, voxelGrassTopMat, landscape);
+        addVoxelBlock(width * 0.78, 0.48, depth * 0.78, x, 1.1, z, voxelGrassMat, landscape);
+      });
+
+      addVoxelTree(-8.2, -5.5, 1.05);
+      addVoxelTree(8.2, -5.5, 1.05);
+      addVoxelTree(-8.5, 5.5, 0.9);
+      addVoxelTree(8.5, 5.5, 0.9);
+      addVoxelTree(-5.8, -10.5, 0.8);
+      addVoxelTree(5.8, -10.5, 0.8);
+
+      const cloudMat = new THREE.MeshStandardMaterial({ color: 0xb9d3d5, roughness: 1 });
+      [[-11, 7, -8], [10, 8, -10], [0, 9, -14]].forEach(([x, y, z]) => {
+        addVoxelBlock(2.8, 0.65, 1.2, x, y, z, cloudMat, landscape);
+        addVoxelBlock(1.5, 0.55, 1.1, x + 0.9, y + 0.45, z, cloudMat, landscape);
+        addVoxelBlock(1.3, 0.45, 1, x - 0.8, y + 0.35, z, cloudMat, landscape);
+      });
+
+      return landscape;
+    }
+
+    const voxelLandscape = buildVoxelEnvironment();
+    voxelEnvironment.add(voxelLandscape);
+    scene.add(voxelEnvironment);
+    voxelEnvironment.visible = false;
 
     // Dust particle atmospheric system
     const particleCount = 150;
@@ -288,16 +361,89 @@ const createGameController = window.__createGameController;
     const boardGroup = new THREE.Group();
     const tiles = []; // 2D array [rank][file]
 
-    // Marble tile vs Obsidian tile materials
+    const THEME_PALETTES = {
+      classic: {
+        label: 'Classic',
+        icon: 'castle',
+        background: 0x0a0b10,
+        fog: 0x0a0b10,
+        fogDensity: 0.025,
+        ambient: 0x2a2838,
+        keyLight: 0xffe8d6,
+        fillLight: 0x4a6fa5,
+        particle: 0xffd700,
+        lightTile: 0xd8d3c8,
+        darkTile: 0x1f232d,
+        frame: 0x0c0e14,
+        whitePiece: 0xf4f1ea,
+        blackPiece: 0x12141a,
+      },
+      walnut: {
+        label: 'Walnut',
+        icon: 'forest',
+        background: 0x0a0b10,
+        fog: 0x0a0b10,
+        fogDensity: 0.025,
+        ambient: 0x2a2838,
+        keyLight: 0xffe8d6,
+        fillLight: 0x4a6fa5,
+        particle: 0xffd700,
+        lightTile: 0xd9b98a,
+        darkTile: 0x4a3126,
+        frame: 0x2b1d15,
+        whitePiece: 0xf5ead2,
+        blackPiece: 0x241915,
+      },
+      emerald: {
+        label: 'Emerald',
+        icon: 'eco',
+        background: 0x0a0b10,
+        fog: 0x0a0b10,
+        fogDensity: 0.025,
+        ambient: 0x2a2838,
+        keyLight: 0xffe8d6,
+        fillLight: 0x4a6fa5,
+        particle: 0xffd700,
+        lightTile: 0xd9ead8,
+        darkTile: 0x163c39,
+        frame: 0x0b2d2c,
+        whitePiece: 0xf1f7ee,
+        blackPiece: 0x112322,
+      },
+      voxel: {
+        label: 'Voxel Grove',
+        icon: 'grid_4x4',
+        background: 0x6fa8c8,
+        fog: 0x6fa8c8,
+        fogDensity: 0.012,
+        ambient: 0xc7dfa0,
+        keyLight: 0xfff0cf,
+        fillLight: 0x88b9d2,
+        particle: 0xd9f0a2,
+        lightTile: 0x91b85b,
+        darkTile: 0x526f3d,
+        frame: 0x493a2a,
+        whitePiece: 0xe9e2c8,
+        blackPiece: 0x374735,
+      },
+    };
+    const DEFAULT_THEME = 'classic';
+    const initialTheme = THEME_PALETTES[DEFAULT_THEME];
+
     const lightTileMat = new THREE.MeshStandardMaterial({
-      color: 0xd8d3c8,
+      color: initialTheme.lightTile,
       roughness: 0.3,
       metalness: 0.1,
     });
     const darkTileMat = new THREE.MeshStandardMaterial({
-      color: 0x1f232d,
+      color: initialTheme.darkTile,
       roughness: 0.5,
       metalness: 0.2,
+    });
+    const frameMat = new THREE.MeshStandardMaterial({
+      color: initialTheme.frame,
+      roughness: 0.6,
+      metalness: 0.5,
     });
 
     const tileGeo = new THREE.BoxGeometry(TILE_SIZE, 0.2, TILE_SIZE);
@@ -323,7 +469,6 @@ const createGameController = window.__createGameController;
 
     // Outer Wooden / Metallic Frame
     const frameGeo = new THREE.BoxGeometry(8.8, 0.25, 8.8);
-    const frameMat = new THREE.MeshStandardMaterial({ color: 0x0c0e14, roughness: 0.6, metalness: 0.5 });
     const frame = new THREE.Mesh(frameGeo, frameMat);
     frame.position.set(0, -0.05, 0);
     frame.receiveShadow = true;
@@ -359,13 +504,13 @@ const createGameController = window.__createGameController;
        PROCEDURAL 3D PIECE GENERATOR
        ========================================================================= */
     const whitePieceMat = new THREE.MeshStandardMaterial({
-      color: 0xf4f1ea,
+      color: initialTheme.whitePiece,
       roughness: 0.18,
       metalness: 0.12,
       bumpScale: 0.05
     });
     const blackPieceMat = new THREE.MeshStandardMaterial({
-      color: 0x12141a,
+      color: initialTheme.blackPiece,
       roughness: 0.24,
       metalness: 0.45,
       bumpScale: 0.05
@@ -384,6 +529,110 @@ const createGameController = window.__createGameController;
       emissive: 0x6b21a8,
       emissiveIntensity: 0.35
     });
+
+    const voxelPieceMaterials = {
+      w: {
+        base: new THREE.MeshStandardMaterial({ color: 0xe9e2c8, roughness: 0.9 }),
+        light: new THREE.MeshStandardMaterial({ color: 0xf8f3dd, roughness: 0.9 }),
+        dark: new THREE.MeshStandardMaterial({ color: 0xa99c79, roughness: 0.9 }),
+        accent: new THREE.MeshStandardMaterial({ color: 0x7d9c49, roughness: 0.9 }),
+      },
+      b: {
+        base: new THREE.MeshStandardMaterial({ color: 0x526f3d, roughness: 0.9 }),
+        light: new THREE.MeshStandardMaterial({ color: 0x78964c, roughness: 0.9 }),
+        dark: new THREE.MeshStandardMaterial({ color: 0x394b32, roughness: 0.9 }),
+        accent: new THREE.MeshStandardMaterial({ color: 0x6d5235, roughness: 0.9 }),
+      },
+    };
+
+    function createVoxelPieceGeometry(type, color) {
+      const group = new THREE.Group();
+      const materials = voxelPieceMaterials[color];
+
+      function addBlock(width, height, depth, x, y, z, material = materials.base) {
+        const block = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
+        block.position.set(x, y, z);
+        group.add(block);
+        return block;
+      }
+
+      addBlock(0.78, 0.16, 0.78, 0, 0.08, 0, materials.dark);
+      addBlock(0.64, 0.12, 0.64, 0, 0.22, 0, materials.accent);
+      addBlock(0.72, 0.07, 0.72, 0, 0.29, 0, materials.light);
+
+      switch (type.toLowerCase()) {
+        case 'p':
+          addBlock(0.4, 0.42, 0.4, 0, 0.53, 0);
+          addBlock(0.52, 0.1, 0.52, 0, 0.79, 0, materials.accent);
+          addBlock(0.4, 0.38, 0.4, 0, 1.03, 0, materials.light);
+          addBlock(0.46, 0.09, 0.46, 0, 1.265, 0, materials.base);
+          addBlock(0.14, 0.1, 0.14, 0, 1.36, 0, materials.accent);
+          break;
+        case 'r':
+          addBlock(0.54, 0.68, 0.54, 0, 0.66, 0);
+          addBlock(0.68, 0.12, 0.68, 0, 1.06, 0, materials.accent);
+          addBlock(0.74, 0.16, 0.74, 0, 1.2, 0, materials.light);
+          addBlock(0.17, 0.2, 0.17, -0.26, 1.38, -0.26, materials.light);
+          addBlock(0.17, 0.2, 0.17, 0.26, 1.38, -0.26, materials.light);
+          addBlock(0.17, 0.2, 0.17, -0.26, 1.38, 0.26, materials.light);
+          addBlock(0.17, 0.2, 0.17, 0.26, 1.38, 0.26, materials.light);
+          addBlock(0.44, 0.12, 0.44, 0, 1.34, 0, materials.dark);
+          addBlock(0.12, 0.34, 0.12, 0, 0.66, 0.29, materials.dark);
+          break;
+        case 'n':
+          addBlock(0.48, 0.5, 0.46, 0, 0.58, 0.04);
+          addBlock(0.3, 0.5, 0.3, 0, 1.04, -0.12, materials.light);
+          addBlock(0.4, 0.38, 0.42, 0, 1.32, 0.08, materials.light);
+          addBlock(0.3, 0.2, 0.3, 0, 1.16, 0.3, materials.accent);
+          addBlock(0.22, 0.14, 0.18, 0, 1.22, 0.52, materials.dark);
+          addBlock(0.1, 0.12, 0.1, -0.12, 1.4, 0.18, materials.dark);
+          addBlock(0.1, 0.12, 0.1, 0.12, 1.4, 0.18, materials.dark);
+          addBlock(0.1, 0.32, 0.12, -0.2, 1.56, -0.1, materials.accent);
+          addBlock(0.1, 0.32, 0.12, 0.2, 1.56, -0.1, materials.accent);
+          addBlock(0.48, 0.1, 0.48, 0, 0.88, 0.04, materials.accent);
+          break;
+        case 'b':
+          addBlock(0.48, 0.62, 0.48, 0, 0.68, 0);
+          addBlock(0.58, 0.12, 0.58, 0, 1.05, 0, materials.accent);
+          addBlock(0.4, 0.34, 0.4, 0, 1.28, 0, materials.light);
+          addBlock(0.28, 0.22, 0.28, 0, 1.55, 0, materials.accent);
+          addBlock(0.12, 0.16, 0.12, 0, 1.74, 0, materials.light);
+          addBlock(0.08, 0.28, 0.08, 0, 0.69, 0.26, materials.dark);
+          addBlock(0.28, 0.08, 0.08, 0, 0.72, 0.26, materials.dark);
+          break;
+        case 'q':
+          addBlock(0.56, 0.72, 0.56, 0, 0.73, 0, materials.light);
+          addBlock(0.68, 0.14, 0.68, 0, 1.16, 0, materials.accent);
+          addBlock(0.76, 0.12, 0.76, 0, 1.29, 0, materials.dark);
+          addBlock(0.16, 0.28, 0.16, -0.27, 1.49, -0.27, materials.light);
+          addBlock(0.16, 0.28, 0.16, 0.27, 1.49, -0.27, materials.light);
+          addBlock(0.16, 0.28, 0.16, -0.27, 1.49, 0.27, materials.light);
+          addBlock(0.16, 0.28, 0.16, 0.27, 1.49, 0.27, materials.light);
+          addBlock(0.2, 0.18, 0.2, 0, 1.46, 0, materials.accent);
+          addBlock(0.1, 0.24, 0.1, 0, 1.67, 0, materials.light);
+          addBlock(0.44, 0.1, 0.44, 0, 0.88, 0.03, materials.accent);
+          break;
+        case 'k':
+          addBlock(0.58, 0.78, 0.58, 0, 0.76, 0, materials.light);
+          addBlock(0.66, 0.12, 0.66, 0, 1.21, 0, materials.accent);
+          addBlock(0.76, 0.14, 0.76, 0, 1.34, 0, materials.dark);
+          addBlock(0.42, 0.16, 0.42, 0, 1.49, 0, materials.light);
+          addBlock(0.14, 0.42, 0.14, 0, 1.78, 0, materials.accent);
+          addBlock(0.38, 0.14, 0.14, 0, 1.88, 0, materials.accent);
+          addBlock(0.1, 0.16, 0.1, 0, 2.07, 0, materials.light);
+          addBlock(0.48, 0.1, 0.48, 0, 0.94, 0.03, materials.accent);
+          break;
+      }
+
+      group.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+
+      return group;
+    }
 
     /* Helper: Procedural Lathe / Tiered Gothic Pedestal */
     function createGothicPedestal(baseRadius = 0.38, topRadius = 0.28, height = 0.22) {
@@ -730,6 +979,54 @@ const createGameController = window.__createGameController;
       };
     }
 
+    function applyTheme(themeName) {
+      const selectedTheme = THEME_PALETTES[themeName] ? themeName : DEFAULT_THEME;
+      const theme = THEME_PALETTES[selectedTheme];
+      const isVoxelTheme = selectedTheme === 'voxel';
+      gameState.theme = selectedTheme;
+
+      scene.background.setHex(theme.background);
+      sceneFog.color.setHex(theme.fog);
+      sceneFog.density = theme.fogDensity;
+      ambientLight.color.setHex(theme.ambient);
+      ambientLight.intensity = isVoxelTheme ? 0.65 : 0.8;
+      keyLight.color.setHex(theme.keyLight);
+      keyLight.intensity = isVoxelTheme ? 1.35 : 1.8;
+      fillLight.color.setHex(theme.fillLight);
+      particleMat.color.setHex(theme.particle);
+      voxelEnvironment.visible = isVoxelTheme;
+      cathedralEnvironment.visible = !isVoxelTheme;
+      const subtitle = document.getElementById('game-subtitle');
+      if (subtitle) subtitle.textContent = isVoxelTheme ? 'Voxel Grove' : 'Gothic Sanctuary';
+      torchLights.forEach((light) => {
+        light.visible = !isVoxelTheme;
+      });
+
+      lightTileMat.color.setHex(theme.lightTile);
+      darkTileMat.color.setHex(theme.darkTile);
+      frameMat.color.setHex(theme.frame);
+      whitePieceMat.color.setHex(theme.whitePiece);
+      blackPieceMat.color.setHex(theme.blackPiece);
+
+      tiles.forEach((row) => {
+        row.forEach((tile) => {
+          const isLight = (tile.userData.rank + tile.userData.file) % 2 === 0;
+          tile.material = isLight ? lightTileMat : darkTileMat;
+        });
+      });
+
+      if (frame) {
+        frame.material = frameMat;
+      }
+
+      syncBoardPieces();
+
+      const themeLabel = document.getElementById('theme-label');
+      const themeIcon = document.getElementById('theme-icon');
+      if (themeLabel) themeLabel.textContent = theme.label;
+      if (themeIcon) themeIcon.textContent = theme.icon;
+    }
+
     function syncBoardPieces() {
       // Clear existing 3d piece meshes
       pieceMap.forEach(mesh => scene.remove(mesh));
@@ -741,11 +1038,16 @@ const createGameController = window.__createGameController;
           const piece = board[r][f];
           if (piece) {
             const square = String.fromCharCode(97 + f) + (8 - r);
-            const pieceMesh = createPieceGeometry(piece.type);
+            const isVoxelTheme = gameState.theme === 'voxel';
+            const pieceMesh = isVoxelTheme
+              ? createVoxelPieceGeometry(piece.type, piece.color)
+              : createPieceGeometry(piece.type);
             
             // Assign material
-            const mat = piece.color === 'w' ? whitePieceMat : blackPieceMat;
-            pieceMesh.traverse(c => { if (c.isMesh) c.material = mat; });
+            if (!isVoxelTheme) {
+              const mat = piece.color === 'w' ? whitePieceMat : blackPieceMat;
+              pieceMesh.traverse(c => { if (c.isMesh) c.material = mat; });
+            }
 
             const coords = getSquareCoords(square);
             pieceMesh.position.set(coords.x, 0, coords.z);
@@ -764,51 +1066,27 @@ const createGameController = window.__createGameController;
     }
 
     syncBoardPieces();
+    applyTheme(gameState.theme || DEFAULT_THEME);
 
     /* =========================================================================
-       ANIMATED PIECE MOVEMENT & COMBAT
+       PIECE MOVEMENT & COMBAT
        ========================================================================= */
     function animateMove(fromSquare, toSquare, isCapture, onComplete) {
       const pieceMesh = pieceMap.get(fromSquare);
       if (!pieceMesh) return;
 
       const targetCoords = getSquareCoords(toSquare);
-      const startPos = pieceMesh.position.clone();
       const endPos = new THREE.Vector3(targetCoords.x, 0, targetCoords.z);
-
       const capturedMesh = pieceMap.get(toSquare);
-      pieceMesh.userData.isAnimating = true;
 
-      const startTime = performance.now();
-      const duration = isCapture ? 800 : 500;
+      pieceMesh.position.copy(endPos);
 
-      audio.playSlide();
-
-      function animStep(now) {
-        const elapsed = now - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-
-        // Arc trajectory
-        const currentPos = new THREE.Vector3().lerpVectors(startPos, endPos, progress);
-        currentPos.y = Math.sin(progress * Math.PI) * (isCapture ? 1.5 : 0.6);
-        pieceMesh.position.copy(currentPos);
-
-        // Mid-point capture shatter trigger
-        if (isCapture && progress >= 0.5 && capturedMesh && capturedMesh.visible) {
-          capturedMesh.visible = false;
-          triggerShatterExplosion(endPos, capturedMesh.userData.piece.color === 'w');
-        }
-
-        if (progress < 1) {
-          requestAnimationFrame(animStep);
-        } else {
-          pieceMesh.position.copy(endPos);
-          pieceMesh.userData.isAnimating = false;
-          if (onComplete) onComplete();
-        }
+      if (isCapture && capturedMesh && capturedMesh.visible) {
+        capturedMesh.visible = false;
+        triggerShatterExplosion(endPos, capturedMesh.userData.piece.color === 'w');
       }
 
-      requestAnimationFrame(animStep);
+      if (onComplete) onComplete();
     }
 
     /* =========================================================================
@@ -1058,6 +1336,43 @@ const createGameController = window.__createGameController;
       applyCameraPreset(gameState.isFlipped ? 2 : 0);
     });
 
+    const themeSelector = document.getElementById('theme-selector');
+    const themeMenu = document.getElementById('theme-menu');
+    const themeSelectButton = document.getElementById('btn-theme-select');
+
+    function setThemeMenuOpen(isOpen) {
+      themeMenu.classList.toggle('opacity-0', !isOpen);
+      themeMenu.classList.toggle('pointer-events-none', !isOpen);
+      themeMenu.classList.toggle('opacity-100', isOpen);
+      themeMenu.classList.toggle('pointer-events-auto', isOpen);
+      themeSelectButton.setAttribute('aria-expanded', String(isOpen));
+    }
+
+    themeSelectButton.addEventListener('click', () => {
+      const isOpen = themeSelectButton.getAttribute('aria-expanded') === 'true';
+      setThemeMenuOpen(!isOpen);
+    });
+
+    document.addEventListener('click', (event) => {
+      if (!themeSelector.contains(event.target)) {
+        setThemeMenuOpen(false);
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        setThemeMenuOpen(false);
+      }
+    });
+
+    document.querySelectorAll('.theme-opt').forEach((opt) => {
+      opt.addEventListener('click', (event) => {
+        const themeName = event.currentTarget.dataset.theme;
+        applyTheme(themeName);
+        setThemeMenuOpen(false);
+      });
+    });
+
     function resetGame() {
       return gameController.reset();
     }
@@ -1110,21 +1425,6 @@ const createGameController = window.__createGameController;
       // Atmospheric torch flicker
       torchLights.forEach((light, i) => {
         light.intensity = 1.0 + Math.sin(time * 6 + i * 2) * 0.25 + (Math.random() - 0.5) * 0.1;
-      });
-
-      // Subtle piece levitation & breathing idle animation
-      pieceMap.forEach((mesh, sq) => {
-        if (mesh.userData && mesh.userData.isAnimating) {
-          return;
-        }
-
-        if (gameState.selectedSquare === sq) {
-          // Floating higher when selected
-          mesh.position.y = 0.25 + Math.sin(time * 5) * 0.08;
-        } else {
-          const fileIndex = sq.charCodeAt(0) - 97;
-          mesh.position.y = Math.sin(time * 2 + fileIndex) * 0.02;
-        }
       });
 
       // Dust particle floating drift

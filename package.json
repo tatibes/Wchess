@@ -1,0 +1,43 @@
+{
+  "name": "gothic-wizards-chess",
+  "version": "1.0.0",
+  "description": "Gothic Wizard's Chess 3D",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "keywords": [
+    "chess",
+    "threejs",
+    "game",
+    "desktop"
+  ],
+  "author": "Copilot",
+  "license": "ISC",
+  "build": {
+    "appId": "com.gothicwizardschess.app",
+    "productName": "Gothic Wizard's Chess",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        "portable"
+      ]
+    },
+    "files": [
+      "**/*",
+      "!**/*.md",
+      "!dist/**",
+      "!node_modules/.cache/**"
+    ]
+  },
+  "devDependencies": {
+    "electron": "^36.5.0",
+    "electron-builder": "^26.0.0",
+    "playwright": "^1.64.1",
+    "tailwindcss": "^3.4.17"
+  }
+}
